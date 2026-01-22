@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { UnauthorizedError } from '../shared/errors/AppError';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -17,16 +18,24 @@ export const authenticateToken = (
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
-    res.status(401).json({ error: 'Token de acesso requerido' });
-    return;
+    return next(new UnauthorizedError('Token de acesso requerido'));
   }
 
-  const secret = process.env.JWT_SECRET || 'your-secret-key';
+  // Validar que JWT_SECRET está configurado
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      return next(new Error('JWT_SECRET não configurado'));
+    }
+    // Apenas em desenvolvimento, usar fallback com warning
+    console.warn('⚠️  JWT_SECRET não configurado. Usando fallback inseguro (apenas desenvolvimento)');
+  }
   
-  jwt.verify(token, secret, (err, decoded) => {
+  const jwtSecret = secret || 'your-secret-key';
+  
+  jwt.verify(token, jwtSecret, (err, decoded) => {
     if (err) {
-      res.status(403).json({ error: 'Token inválido ou expirado' });
-      return;
+      return next(new UnauthorizedError('Token inválido ou expirado'));
     }
 
     req.user = decoded as { id: number; email?: string };

@@ -1,7 +1,9 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import recipeService from '../services/recipeService';
 import { CreateRecipeDto, UpdateRecipeDto } from '../types';
 import { z } from 'zod';
+import { ValidationError, NotFoundError } from '../shared/errors/AppError';
+import { logger } from '../config/logger';
 
 const createRecipeSchema = z.object({
   body: z.object({
@@ -45,41 +47,48 @@ const updateRecipeSchema = z.object({
 });
 
 export class RecipeController {
-  async create(req: Request, res: Response): Promise<void> {
+  async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const data = createRecipeSchema.parse({ body: req.body }).body as CreateRecipeDto;
+      logger.info('Creating recipe', { name: data.name, requestId: req.id });
+      
       const recipe = await recipeService.create(data);
+      
+      logger.info('Recipe created', { recipeId: recipe.id, requestId: req.id });
       res.status(201).json(recipe);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Dados inválidos', details: error.errors });
-        return;
+        return next(new ValidationError('Dados inválidos', error.errors));
       }
-      console.error('Erro ao criar receita:', error);
-      res.status(500).json({ error: 'Erro ao criar receita' });
+      logger.error('Failed to create recipe', { error: error instanceof Error ? error.message : String(error), requestId: req.id });
+      next(error);
     }
   }
   
-  async findAll(req: Request, res: Response): Promise<void> {
+  async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
+      
       const recipes = await recipeService.findAll(limit, offset);
       res.json(recipes);
     } catch (error) {
-      console.error('Erro ao listar receitas:', error);
-      res.status(500).json({ error: 'Erro ao listar receitas' });
+      logger.error('Failed to list recipes', { error: error instanceof Error ? error.message : String(error), requestId: req.id });
+      next(error);
     }
   }
   
-  async findById(req: Request, res: Response): Promise<void> {
+  async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return next(new ValidationError('ID inválido'));
+      }
+      
       const recipe = await recipeService.findById(id);
       
       if (!recipe) {
-        res.status(404).json({ error: 'Receita não encontrada' });
-        return;
+        return next(new NotFoundError('Receita', id));
       }
       
       // Incrementar contador de visualização
@@ -87,16 +96,18 @@ export class RecipeController {
       
       res.json(recipe);
     } catch (error) {
-      console.error('Erro ao buscar receita:', error);
-      res.status(500).json({ error: 'Erro ao buscar receita' });
+      logger.error('Failed to find recipe', { error: error instanceof Error ? error.message : String(error), requestId: req.id });
+      next(error);
     }
   }
   
-  async update(req: Request, res: Response): Promise<void> {
+  async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const parsed = updateRecipeSchema.parse({ params: req.params, body: req.body });
       const id = parsed.params.id;
       const data = parsed.body as UpdateRecipeDto;
+      
+      logger.info('Updating recipe', { recipeId: id, requestId: req.id });
       
       // Criar nova versão se version_note for fornecido
       const createNewVersion = !!data.version_note;
@@ -104,40 +115,46 @@ export class RecipeController {
       const recipe = await recipeService.update(id, data, createNewVersion);
       
       if (!recipe) {
-        res.status(404).json({ error: 'Receita não encontrada' });
-        return;
+        return next(new NotFoundError('Receita', id));
       }
       
+      logger.info('Recipe updated', { recipeId: id, requestId: req.id });
       res.json(recipe);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Dados inválidos', details: error.errors });
-        return;
+        return next(new ValidationError('Dados inválidos', error.errors));
       }
-      console.error('Erro ao atualizar receita:', error);
-      res.status(500).json({ error: 'Erro ao atualizar receita' });
+      logger.error('Failed to update recipe', { error: error instanceof Error ? error.message : String(error), requestId: req.id });
+      next(error);
     }
   }
   
-  async delete(req: Request, res: Response): Promise<void> {
+  async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return next(new ValidationError('ID inválido'));
+      }
+      
+      logger.info('Deleting recipe', { recipeId: id, requestId: req.id });
       await recipeService.delete(id);
+      
+      logger.info('Recipe deleted', { recipeId: id, requestId: req.id });
       res.status(204).send();
     } catch (error) {
-      console.error('Erro ao deletar receita:', error);
-      res.status(500).json({ error: 'Erro ao deletar receita' });
+      logger.error('Failed to delete recipe', { error: error instanceof Error ? error.message : String(error), requestId: req.id });
+      next(error);
     }
   }
   
-  async getTopRecipes(req: Request, res: Response): Promise<void> {
+  async getTopRecipes(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const limit = parseInt(req.query.limit as string) || 10;
       const recipes = await recipeService.getTopRecipes(limit);
       res.json(recipes);
     } catch (error) {
-      console.error('Erro ao buscar receitas mais visualizadas:', error);
-      res.status(500).json({ error: 'Erro ao buscar receitas mais visualizadas' });
+      logger.error('Failed to get top recipes', { error: error instanceof Error ? error.message : String(error), requestId: req.id });
+      next(error);
     }
   }
 }

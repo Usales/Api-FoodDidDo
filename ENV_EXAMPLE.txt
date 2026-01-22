@@ -1,18 +1,37 @@
-# Server
+# Configuração de Ambiente - API FoodDidDo
+
+# Porta do servidor
 PORT=3000
+
+# Ambiente (development, production, test)
 NODE_ENV=development
 
-# Database
+# Banco de Dados
+# Tipo: 'postgresql' ou 'sqlite'
+DB_TYPE=postgresql
+
+# PostgreSQL (se DB_TYPE=postgresql)
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=fooddiddo
 DB_USER=postgres
 DB_PASSWORD=postgres
 
-# JWT
-JWT_SECRET=your-secret-key-change-in-production
-JWT_EXPIRES_IN=24h
+# SQLite (se DB_TYPE=sqlite)
+# O banco será criado automaticamente em data/fooddiddo.db
+
+# Autenticação JWT
+# OBRIGATÓRIO em produção!
+JWT_SECRET=seu-secret-key-aqui-mude-em-producao
+# JWT_REFRESH_SECRET=seu-refresh-secret-key-aqui (para refresh tokens futuros)
 
 # CORS
-CORS_ORIGIN=http://localhost:3000
+# Lista de origens permitidas separadas por vírgula
+# Exemplo: CORS_ORIGINS=http://localhost:5173,http://localhost:3001
+CORS_ORIGINS=http://localhost:5173,http://localhost:3001
 
+# Logging
+LOG_LEVEL=info
+
+# Versão da aplicação
+APP_VERSION=1.0.0
